@@ -72,6 +72,12 @@ namespace ManifestSerialize
             Packages = new List<Package>();
         }
     }
+    internal class Package_2
+    {
+        internal string name;
+        internal int start;
+        internal int end;
+    }
     class Program
     {
         static string fileName = "Manifest.gz";
@@ -144,12 +150,107 @@ namespace ManifestSerialize
                 {
                     using (GZipStream gz = new GZipStream(stream, CompressionMode.Decompress))
                     {
+
+                        var sr = new StreamReader(gz);
+                        int level = 0,
+                            lineNumber = 0;
+                        bool IsArray = false;
+                        List<Package_2> listPack = new List<Package_2>();
+                        Package_2 temp = null;
+                        while (!sr.EndOfStream)
+                        {
+                            string line = sr.ReadLine().Trim();
+                            lineNumber++;
+                            //Console.WriteLine(lineNumber.ToString());
+                            //Console.WriteLine(line);
+                            switch (line)
+                            {
+                                case "{":
+                                    {
+                                        level++;
+                                        if (level == 2 && !IsArray)
+                                        {
+                                            if(temp != null)
+                                            {
+                                                listPack.Add(temp);
+                                                temp = null;
+                                            }
+                                            temp = new Package_2();
+                                            temp.start = lineNumber;
+                                        }
+                                    }
+                                    break;
+                                case "}":
+                                case "},": 
+                                    {
+                                        if(level == 2 && temp != null && !IsArray)
+                                        {
+                                            temp.end = lineNumber;
+                                            listPack.Add(temp);
+                                            temp = null;
+                                        }
+                                        level--;
+                                    }
+                                    break;
+                                case "[": if(level == 2)IsArray = true; break;
+                                case "]":
+                                case "],": if (level == 2) IsArray = false; break;
+                                default:
+                                    {
+                                        string[] str = line.Split(':');
+                                        if (str.Length >= 2)
+                                        {
+                                            switch(str[1].Trim())
+                                            {
+                                                case "[": if (level == 2) IsArray = true; break;
+                                                case "]":
+                                                case "],": if (level == 2) IsArray = false; break;
+                                                case "{":level++;break;
+                                                case "}":
+                                                case "},": level--; break;
+                                                default:
+                                                    {
+                                                        if (level == 2 && str[0].Trim() == "\"Name\"" && temp != null && !IsArray)
+                                                        {
+                                                            temp.name = str[1].Trim();
+                                                        }
+                                                    }
+                                                    break;
+                                            }
+                                            
+                                        }
+                                    }
+                                    break;
+                            }
+                        }
+                        int i = 0;
+                        foreach(var item in listPack)
+                        {
+                            Console.WriteLine("{0}:{1}({2};{3})", (++i).ToString(), item.name, item.start.ToString(), item.end.ToString());
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(string.Format("Ошибка при разархивации/чтении файла:{0}", ex.Message));
+            }
+            try
+            {
+                using (Stream stream = File.Open(fileName, FileMode.Open))
+                {
+                    using (GZipStream gz = new GZipStream(stream, CompressionMode.Decompress))
+                    {
+
+                        int i = 0;
                         DataContractJsonSerializer ser = new DataContractJsonSerializer(typeof(Packages_));
                         Packages_ p_ = (Packages_)ser.ReadObject(new MemoryStream(Encoding.UTF8.GetBytes(new StreamReader(gz).ReadToEnd())));
                         foreach (var package in p_.Packages)
                         {
-                            Console.WriteLine(string.Format("PackageName={0}", package.Name));
+                            Console.WriteLine(string.Format("{0}:{1}", (++i).ToString(), package.Name));
+
                         }
+
                     }
                 }
             }
